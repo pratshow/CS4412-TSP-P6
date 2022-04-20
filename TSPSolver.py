@@ -1,21 +1,19 @@
 # Brandon Watkins
 # CS 4412
 
-#!/usr/bin/python3
+# !/usr/bin/python3
 import math
 import random
 
 from PriorityQueue import *
 from which_pyqt import PYQT_VER
+
 if PYQT_VER == 'PYQT5':
 	from PyQt5.QtCore import QLineF, QPointF
 elif PYQT_VER == 'PYQT4':
 	from PyQt4.QtCore import QLineF, QPointF
 else:
 	raise Exception('Unsupported Version of PyQt: {}'.format(PYQT_VER))
-
-
-
 
 import time
 import numpy as np
@@ -25,15 +23,13 @@ import itertools
 from copy import deepcopy
 
 
-
 class TSPSolver:
-	def __init__( self, gui_view ):
+	def __init__(self, gui_view):
 		self._scenario = None
 		self._bssf = None
 
-	def setupWithScenario( self, scenario ):
+	def setupWithScenario(self, scenario):
 		self._scenario = scenario
-
 
 	''' <summary>
 		This is the entry point for the default solver
@@ -45,8 +41,8 @@ class TSPSolver:
 		solution found, and three null values for fields not used for this 
 		algorithm</returns> 
 	'''
-	
-	def defaultRandomTour( self, time_allowance=60.0 ):
+
+	def defaultRandomTour(self, time_allowance=60.0):
 		results = {}
 		cities = self._scenario.getCities()
 		ncities = len(cities)
@@ -54,13 +50,13 @@ class TSPSolver:
 		count = 0
 		bssf = None
 		start_time = time.time()
-		while not foundTour and time.time()-start_time < time_allowance:
+		while not foundTour and time.time() - start_time < time_allowance:
 			# create a random permutation
-			perm = np.random.permutation( ncities )
+			perm = np.random.permutation(ncities)
 			route = []
 			# Now build the route using the random permutation
-			for i in range( ncities ):
-				route.append( cities[ perm[i] ] )
+			for i in range(ncities):
+				route.append(cities[perm[i]])
 			bssf = TSPSolution(route)
 			count += 1
 			if bssf.cost < np.inf:
@@ -76,7 +72,6 @@ class TSPSolver:
 		results['pruned'] = None
 		return results
 
-
 	''' <summary>
 		Greedy algorithm for TSP. Cycles through all of the cities, using each as a starting city. At each city, this
 		greedily selects the city with the cheapest cost to visit next. The best route discovered is kept/returned.
@@ -90,37 +85,22 @@ class TSPSolver:
 	def greedy(self, time_allowance=60.0):
 		results = {}
 		intermediateSolutions = 0
-		startTime = time.time()
 		cities = self._scenario.getCities()
 		nCities = len(cities)
-		bssf = None
+		startTime = time.time()
+		greed = Greedy(cities)
 
-		# Cycling through all cities, setting the starting city to each
 		for i in range(nCities):
 			if time.time() - startTime > time_allowance: break
 
-			# May as well use the B&B states.
-			# They do what we need to, with some additional overhead (Don't really need to update the cost matrix).
-			# If you were to run this more than just n_cities times, you'd want to swap it out for something more efficient.
-			base = State(partialPath=cities, startingCityIndex=i)
-
-			# Just picks the city with the cheapest cost, until no legal edges remain
-			while len(base.partialPath) < len(cities):
-				children = base.expand()
-				if len(children) == 0: break
-				children.sort(key=lambda c: c.bound)
-				base = children[0]
-			# If the route was complete, legal, and an improvement, update the bssf
-			if base.isValidSolution():
-				if bssf is not None:
-					if base.lowerbound() < bssf.lowerbound():
-						intermediateSolutions += 1
-						bssf = base
-				else: bssf = base
+			if greed.attemptRoute(startingCity=i) and greed.currentCost < greed.bssfCost:
+				if greed.bssfRoute is not None:
+					intermediateSolutions += 1
+				greed.setBSSFToCurrent()
 
 		end_time = time.time()
 
-		self._bssf = TSPSolution(getCityPath(cities, bssf)) if bssf is not None else None
+		self._bssf = TSPSolution(greed.getBSSFPath(cities))
 
 		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
 		results['time'] = end_time - startTime
@@ -132,7 +112,6 @@ class TSPSolver:
 
 		return results
 
-	
 	''' <summary>
 		Branch and bound optimal algorithm.
 		</summary>
@@ -159,7 +138,8 @@ class TSPSolver:
 		while S.notEmpty() and time.time() - start_time < time_allowance:
 			maxQueueSize = max(maxQueueSize, len(S.queue))
 			subproblem = S.deleteMin()
-			if subproblem.lowerbound() == math.inf or (self._bssf is not None and subproblem.lowerbound() > self._bssf.lowerbound()):
+			if subproblem.lowerbound() == math.inf or (
+					self._bssf is not None and subproblem.lowerbound() > self._bssf.lowerbound()):
 				totalPruned += 1
 				continue
 			smallerSubproblems = subproblem.expand()
@@ -169,14 +149,16 @@ class TSPSolver:
 			totalPruned += (n_cities - len(subproblem.partialPath) - len(smallerSubproblems))
 
 			for P in smallerSubproblems:
-				if P.lowerbound() == math.inf: totalPruned += 1
+				if P.lowerbound() == math.inf:
+					totalPruned += 1
 				elif P.isValidSolution():
 					if self._bssf is None or P.lowerbound() < self._bssf.lowerbound():
 						self._bssf = P
 						intermediateSolutions += 1
 				elif self._bssf is None or P.lowerbound() < self._bssf.lowerbound():
 					# Scales the priority, so that initially it favors a "deep" search, gradually transitioning to wide
-					S.insert(P, P.lowerbound() * time_allowance / (P.partialPathSize() * (time_allowance - (time.time() - start_time))))
+					S.insert(P, P.lowerbound() * time_allowance / (
+								P.partialPathSize() * (time_allowance - (time.time() - start_time))))
 				else:
 					totalPruned += 1
 
@@ -196,7 +178,6 @@ class TSPSolver:
 
 		return results
 
-
 	''' <summary>
 		This is the entry point for the algorithm you'll write for your group project.
 		</summary>
@@ -205,17 +186,16 @@ class TSPSolver:
 		best solution found.  You may use the other three field however you like.
 		algorithm</returns> 
 	'''
-		
+
 	def fancy(self, time_allowance=60.0):
 		pass
-
 
 	'''
 		Attempts to find an initial BSSF via an incredibly simple greedy algorithm, followed by checking random routes
 		for the given number of attempts. Returns the best route's state, or None if none found.
 	'''
 
-	def initialBSSF(self, cities, attempts = 3, time_allowance = 10.):
+	def initialBSSF(self, cities, attempts=3, time_allowance=10.):
 		bssf = None
 		start_time = time.time()
 
@@ -232,7 +212,7 @@ class TSPSolver:
 		# Checking random routes for the specified number of attempts
 		count = 0
 		indices = [i for i in range(1, len(cities))]
-		while time.time()-start_time < time_allowance and count < attempts:
+		while time.time() - start_time < time_allowance and count < attempts:
 			base = State(partialPath=cities)
 			random.shuffle(indices)
 
@@ -258,8 +238,9 @@ class TSPSolver:
 	Modifies the input State's costMatrix and lowerBound, in place.
 '''
 
+
 def lowerBound(state):
-	assert(type(state) == State)
+	assert (type(state) == State)
 	# Reduce cost matrix rows
 	# This represents taking the cheapest edge FROM each of the nodes.
 	# Reducing the other values by this amount, because taking those edges instead would result in their cell's cost,
@@ -290,6 +271,7 @@ def lowerBound(state):
 	Note: This does not reduce the matrix at all.
 '''
 
+
 def initialCostMatrix(cities):
 	# Create initial cost matrix
 	costMatrix = []
@@ -318,7 +300,8 @@ def initialCostMatrix(cities):
 	The cost matrix still needs to be reduced.
 '''
 
-def updateCostMatrix(state = None):
+
+def updateCostMatrix(state=None):
 	assert type(state) == State
 	state.bound += state.costMatrix[state.partialPath[-2]][state.id]
 
@@ -332,8 +315,9 @@ def updateCostMatrix(state = None):
 	Gets the actual list of cities in order of "visitation" from the travelling salesman (starting city is first/index 0)
 '''
 
-def getCityPath(cities, state = None):
-	assert(type(state) == State)
+
+def getCityPath(cities, state=None):
+	assert (type(state) == State)
 	path = state.getPath()
 	returnPath = []
 	for cityIndex in path:
@@ -348,15 +332,16 @@ def getCityPath(cities, state = None):
 	city index that is about to be evaluated. self.partialPath will contain a list of all city indexes waiting to be evaluated.
 '''
 
+
 class State:
 
-	def __init__(self, parent = None, partialPath = None, startingCityIndex = 0):
-		assert(partialPath is not None)
+	def __init__(self, parent=None, partialPath=None, startingCityIndex=0):
+		assert (partialPath is not None)
 		assert (parent is None or type(parent) == State)
-		assert((parent is not None and not parent.partialPath.__contains__(partialPath)) or parent is None)
+		assert ((parent is not None and not parent.partialPath.__contains__(partialPath)) or parent is None)
 		self.bound = parent.bound if parent is not None else 0
 		# To keep track of which city this is for.
-		self.id = partialPath if parent is not None else startingCityIndex # Can probably get rid of this, was used before I fixed my partialPath
+		self.id = partialPath if parent is not None else startingCityIndex  # Can probably get rid of this, was used before I fixed my partialPath
 
 		if parent is None:
 			self.partialPath = [self.id]
@@ -379,7 +364,8 @@ class State:
 		return len(self.partialPath) == len(self.costMatrix[0])
 
 	def isValidSolution(self):
-		return self.isCompleteSolution() and self.costMatrix[self.id][self.partialPath[0]] != math.inf and self.bound != math.inf
+		return self.isCompleteSolution() and self.costMatrix[self.id][
+			self.partialPath[0]] != math.inf and self.bound != math.inf
 
 	def expand(self):
 		children = []
@@ -399,3 +385,76 @@ class State:
 		for i in range(len(self.partialPath) - 1):
 			s += str(self.partialPath[i]) + ", "
 		return s + str(self.partialPath[len(self.partialPath) - 1])
+
+
+'''
+	Similar to the B&B State, but significantly more efficient. Not compatible with the B&B State at all.
+	Only stores the current route, the bssf, and a single cost matrix, which is never copied or modified. 
+'''
+
+class Greedy:
+
+	def __init__(self, cities):
+		self.costMatrix = initialCostMatrix(cities)
+		self.currentPath = []
+		self.remainingCities = []
+		self.currentCost = 0
+		self.bssfCost = math.inf
+		self.bssfRoute = []
+
+	def __resetStartingCity__(self, cityIndex):
+		cities = [i for i in range(len(self.costMatrix[0]))]
+		cities.remove(cityIndex)
+		self.currentPath = [cityIndex]
+		self.remainingCities = cities
+		self.currentCost = 0
+
+	def __getCheapestCity__(self):
+		bssfCost = math.inf
+		bssfCityIndex = None
+		for cityIndex in self.remainingCities:
+			if self.costMatrix[self.currentPath[-1]][cityIndex] < bssfCost:
+				bssfCost = self.costMatrix[self.currentPath[-1]][cityIndex]
+				bssfCityIndex = cityIndex
+		return bssfCityIndex
+
+	def __nextCity__(self):
+		cityIndex = self.__getCheapestCity__()
+		if cityIndex is None: return False
+		self.currentCost += self.costMatrix[self.currentPath[-1]][cityIndex]
+		self.currentPath.append(cityIndex)
+		self.remainingCities.remove(cityIndex)
+		return True
+
+	def __isValidSolution__(self):
+		return (len(self.remainingCities) == 0 and
+				len(self.currentPath) == len(self.costMatrix[0]) and
+				self.currentCost != math.inf)
+
+	# Sets the starting city, and attempts to find a greedy route, returning whether it was successful.
+	def attemptRoute(self, startingCity = None):
+		assert (startingCity is not None)
+		self.__resetStartingCity__(cityIndex=startingCity)
+		while True:
+			if not self.__nextCity__(): break
+		self.currentCost += self.costMatrix[self.currentPath[-1]][self.currentPath[0]]
+		return self.__isValidSolution__()
+
+	def setBSSFToCurrent(self):
+		assert(self.__isValidSolution__())
+		self.bssfCost = self.currentCost
+		self.bssfRoute = deepcopy(self.currentPath)
+
+	def getBSSFPath(self, cities = None):
+		assert(cities is not None)
+		path = []
+		for cityIndex in self.bssfRoute:
+			path.append(cities[cityIndex])
+		return path
+
+	def getPath(self, cities = None):
+		assert(cities is not None)
+		path = []
+		for cityIndex in self.currentPath:
+			path.append(cities[cityIndex])
+		return path
