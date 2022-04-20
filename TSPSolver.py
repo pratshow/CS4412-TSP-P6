@@ -3,6 +3,7 @@
 
 #!/usr/bin/python3
 import math
+import random
 
 from PriorityQueue import *
 from which_pyqt import PYQT_VER
@@ -77,10 +78,8 @@ class TSPSolver:
 
 
 	''' <summary>
-		This is the entry point for the greedy solver, which you must implement for 
-		the group project (but it is probably a good idea to just do it for the branch-and
-		bound project as a way to get your feet wet).  Note this could be used to find your
-		initial BSSF.
+		Greedy algorithm for TSP. Cycles through all of the cities, using each as a starting city. At each city, this
+		greedily selects the city with the cheapest cost to visit next. The best route discovered is kept/returned.
 		</summary>
 		<returns>results dictionary for GUI that contains three ints: cost of best solution, 
 		time spent to find best solution, total number of solutions found, the best
@@ -89,11 +88,53 @@ class TSPSolver:
 	'''
 
 	def greedy(self, time_allowance=60.0):
-		pass
+		results = {}
+		intermediateSolutions = 0
+		startTime = time.time()
+		cities = self._scenario.getCities()
+		nCities = len(cities)
+		bssf = None
+
+		# Cycling through all cities, setting the starting city to each
+		for i in range(nCities):
+			if time.time() - startTime > time_allowance: break
+
+			# May as well use the B&B states.
+			# They do what we need to, with some additional overhead (Don't really need to update the cost matrix).
+			# If you were to run this more than just n_cities times, you'd want to swap it out for something more efficient.
+			base = State(partialPath=cities, startingCityIndex=i)
+
+			# Just picks the city with the cheapest cost, until no legal edges remain
+			while len(base.partialPath) < len(cities):
+				children = base.expand()
+				if len(children) == 0: break
+				children.sort(key=lambda c: c.bound)
+				base = children[0]
+			# If the route was complete, legal, and an improvement, update the bssf
+			if base.isValidSolution():
+				if bssf is not None:
+					if base.lowerbound() < bssf.lowerbound():
+						intermediateSolutions += 1
+						bssf = base
+				else: bssf = base
+
+		end_time = time.time()
+
+		self._bssf = TSPSolution(getCityPath(cities, bssf)) if bssf is not None else None
+
+		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
+		results['time'] = end_time - startTime
+		results['count'] = intermediateSolutions
+		results['soln'] = self._bssf if self._bssf is not None else None
+		results['max'] = "--"
+		results['total'] = "--"
+		results['pruned'] = "--"
+
+		return results
 
 	
 	''' <summary>
-		This is the entry point for the branch-and-bound algorithm that you will implement
+		Branch and bound optimal algorithm.
 		</summary>
 		<returns>results dictionary for GUI that contains three ints: cost of best solution, 
 		time spent to find best solution, total number solutions found during search (does
@@ -105,7 +146,6 @@ class TSPSolver:
 		results = {}
 		cities = self._scenario.getCities()
 		n_cities = len(cities)
-		foundTour = False
 		intermediateSolutions = 0
 		totalPruned = 0
 		maxQueueSize = 0
@@ -134,10 +174,8 @@ class TSPSolver:
 					if self._bssf is None or P.lowerbound() < self._bssf.lowerbound():
 						self._bssf = P
 						intermediateSolutions += 1
-						foundTour = True
 				elif self._bssf is None or P.lowerbound() < self._bssf.lowerbound():
 					# Scales the priority, so that initially it favors a "deep" search, gradually transitioning to wide
-					#S.insert(P, P.lowerbound() * (time_allowance - (time.time() - start_time)) / (P.partialPathSize() * time_allowance))
 					S.insert(P, P.lowerbound() * time_allowance / (P.partialPathSize() * (time_allowance - (time.time() - start_time))))
 				else:
 					totalPruned += 1
@@ -148,10 +186,10 @@ class TSPSolver:
 
 		self._bssf = TSPSolution(getCityPath(cities, self._bssf)) if self._bssf is not None else None
 
-		results['cost'] = self._bssf.cost if foundTour else math.inf
+		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
 		results['time'] = end_time - start_time
 		results['count'] = intermediateSolutions
-		results['soln'] = self._bssf if foundTour else None
+		results['soln'] = self._bssf
 		results['max'] = maxQueueSize
 		results['total'] = totalChildStatesGenerated
 		results['pruned'] = totalPruned
@@ -181,7 +219,7 @@ class TSPSolver:
 		bssf = None
 		start_time = time.time()
 
-		# Just checking for a quick greedy route
+		# Just checking for a quick greedy route.
 		base = State(partialPath=cities)
 		while len(base.partialPath) < len(cities):
 			children = base.expand()
@@ -289,15 +327,6 @@ def updateCostMatrix(state = None):
 		state.costMatrix[i][state.id] = math.inf
 	state.costMatrix[state.id][state.partialPath[-2]] = math.inf
 
-	# Was used before I fixed my partialPath
-	#assert type(state) == State
-	#state.bound += state.costMatrix[state.parent.id][state.id]
-
-	#for i in range(len(state.costMatrix[0])):
-	#	state.costMatrix[state.parent.id][i] = math.inf
-	#	state.costMatrix[i][state.id] = math.inf
-	#state.costMatrix[state.id][state.parent.id] = math.inf
-
 
 '''
 	Gets the actual list of cities in order of "visitation" from the travelling salesman (starting city is first/index 0)
@@ -321,14 +350,13 @@ def getCityPath(cities, state = None):
 
 class State:
 
-	def __init__(self, parent = None, partialPath = None):
+	def __init__(self, parent = None, partialPath = None, startingCityIndex = 0):
 		assert(partialPath is not None)
 		assert (parent is None or type(parent) == State)
 		assert((parent is not None and not parent.partialPath.__contains__(partialPath)) or parent is None)
-		#self.parent = parent # Was used before I fixed my partialPath
 		self.bound = parent.bound if parent is not None else 0
 		# To keep track of which city this is for.
-		self.id = partialPath if parent is not None else 0 # Can probably get rid of this, was used before I fixed my partialPath
+		self.id = partialPath if parent is not None else startingCityIndex # Can probably get rid of this, was used before I fixed my partialPath
 
 		if parent is None:
 			self.partialPath = [self.id]
@@ -353,12 +381,6 @@ class State:
 	def isValidSolution(self):
 		return self.isCompleteSolution() and self.costMatrix[self.id][self.partialPath[0]] != math.inf and self.bound != math.inf
 
-		# Was used before I fixed my partialPath
-		#a = self
-		#while a.parent is not None:
-		#	a = a.parent
-		#return self.isCompleteSolution() and self.costMatrix[self.id][a.id] != math.inf and self.bound != math.inf
-
 	def expand(self):
 		children = []
 		for i in range(len(self.costMatrix[0])):
@@ -372,25 +394,8 @@ class State:
 	def getPath(self):
 		return self.partialPath
 
-		# Was used before I fixed my partialPath
-		#a = self
-		#cities = []
-		#while a is not None:
-		#	cities.insert(0, a.id)
-		#	a = a.parent
-		#return cities
-
 	def toString(self):
 		s = ""
 		for i in range(len(self.partialPath) - 1):
 			s += str(self.partialPath[i]) + ", "
 		return s + str(self.partialPath[len(self.partialPath) - 1])
-
-		# Was used before I fixed my partialPath
-		#a = self.parent
-		#s = str(self.id)
-		#while a is not None:
-		#	s = str(a.id) + "," + s
-		#	a = a.parent
-		#return s
-
