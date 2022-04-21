@@ -188,7 +188,80 @@ class TSPSolver:
 	'''
 
 	def fancy(self, time_allowance=60.0):
-		pass
+		results = {}
+		intermediateSolutions = 0
+		cities = self._scenario.getCities()
+		nCities = len(cities)
+		startTime = time.time()
+
+		# Finding initial BSSF
+		greed = Greedy(cities)
+		for i in range(nCities):
+			if time.time() - startTime > time_allowance: break
+			if greed.attemptRoute(startingCity=i) and greed.currentCost < greed.bssfCost:
+				greed.setBSSFToCurrent()
+		self._bssf = TSPSolution(greed.getBSSFPath(cities))
+
+		# 2-opt algorithm
+		improvementMade = True
+		# While improvements are still being made.
+		while improvementMade and time.time() - startTime < time_allowance:
+			improvementMade = False
+			# i = the initial index to start reversing cities in the route at.
+			for i in range(nCities - 1):
+				# k = the city to stop reversing cities at.
+				for k in range(i + 1, nCities):
+					# If it ran out of time, exit while loop.
+					if time.time() - startTime > time_allowance:
+						# Obviously no improvement made, just being used to exit the for-loops; the while loop will discontinue
+						improvementMade = True
+						break
+					# Reverses the section of the route between i and k, and creates a new solution with the new route
+					newRoute = TSPSolution(self.twoOptSwap(deepcopy(self._bssf.route), i, k))
+					# If the new route is better, update bssf, and restart the while loop.
+					if newRoute.cost < self._bssf.cost:
+						intermediateSolutions += 1
+						self._bssf = newRoute
+						improvementMade = True
+						# Found a solution. Exiting both for-loops, to start next while loop.
+						break
+				# Found a solution in current while loop. Exiting both for-loops, to start next while loop.
+				if improvementMade: break
+
+		end_time = time.time()
+
+		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
+		results['time'] = end_time - startTime
+		results['count'] = intermediateSolutions
+		results['soln'] = self._bssf if self._bssf is not None else None
+		results['max'] = "--"
+		results['total'] = "--"
+		results['pruned'] = "--"
+
+		return results
+
+	'''
+		Reverses the order of the route between indices startInclusive and stopInclusive. 
+		Used as part of the 2-opt algorithm.
+	'''
+
+	def twoOptSwap(self, route = None, startInclusive = -1, stopInclusive = -1):
+		assert(route is not None)
+		assert(startInclusive >= 0 and startInclusive < len(route) - 1)
+		assert(stopInclusive > startInclusive and stopInclusive <= len(route))
+
+		returnRoute = []
+		# Adds the first part of the route onto the return route.
+		for i in range(startInclusive):
+			returnRoute.append(route[i])
+		# Reverses the middle section of the route, and adds to the return route.
+		for i in range(stopInclusive, startInclusive - 1, -1):
+			returnRoute.append(route[i])
+		# Adds the last part of the route onto the return route.
+		for i in range(stopInclusive + 1, len(route)):
+			returnRoute.append(route[i])
+
+		return returnRoute
 
 	'''
 		Attempts to find an initial BSSF via an incredibly simple greedy algorithm, followed by checking random routes
@@ -391,6 +464,7 @@ class State:
 	Similar to the B&B State, but significantly more efficient. Not compatible with the B&B State at all.
 	Only stores the current route, the bssf, and a single cost matrix, which is never copied or modified. 
 '''
+
 
 class Greedy:
 
