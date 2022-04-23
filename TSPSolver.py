@@ -188,6 +188,9 @@ class TSPSolver:
 	'''
 
 	def fancy(self, time_allowance=60.0):
+		# If you want to run the augmented algorithm:
+		#return self.fancyQueue(time_allowance)
+
 		results = {}
 		intermediateSolutions = 0
 		cities = self._scenario.getCities()
@@ -203,12 +206,17 @@ class TSPSolver:
 		self._bssf = TSPSolution(greed.getBSSFPath(cities))
 
 		# 2-opt algorithm
+		# Note: much of the basis for this is from https://en.wikipedia.org/wiki/2-opt
 		improvementMade = True
 		# While improvements are still being made.
 		while improvementMade and time.time() - startTime < time_allowance:
 			improvementMade = False
 			# i = the initial index to start reversing cities in the route at.
 			for i in range(nCities - 1):
+				if time.time() - startTime > time_allowance:
+					# Obviously no improvement made, just being used to exit the for-loops; the while loop will discontinue
+					improvementMade = True
+					break
 				# k = the city to stop reversing cities at.
 				for k in range(i + 1, nCities):
 					# If it ran out of time, exit while loop.
@@ -217,7 +225,7 @@ class TSPSolver:
 						improvementMade = True
 						break
 					# Reverses the section of the route between i and k, and creates a new solution with the new route
-					newRoute = TSPSolution(self.twoOptSwap(deepcopy(self._bssf.route), i, k))
+					newRoute = TSPSolution(self.twoOptSwap(deepcopy(P.route), i, k))
 					# If the new route is better, update bssf, and restart the while loop.
 					if newRoute.cost < self._bssf.cost:
 						intermediateSolutions += 1
@@ -227,6 +235,55 @@ class TSPSolver:
 						break
 				# Found a solution in current while loop. Exiting both for-loops, to start next while loop.
 				if improvementMade: break
+
+		end_time = time.time()
+
+		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
+		results['time'] = end_time - startTime
+		results['count'] = intermediateSolutions
+		results['soln'] = self._bssf if self._bssf is not None else None
+		results['max'] = "--"
+		results['total'] = "--"
+		results['pruned'] = "--"
+
+		return results
+
+	def fancyQueue(self, time_allowance=60.0):
+		results = {}
+		intermediateSolutions = 0
+		cities = self._scenario.getCities()
+		nCities = len(cities)
+		startTime = time.time()
+
+		# Finding initial BSSF
+		greed = Greedy(cities)
+		for i in range(nCities):
+			if time.time() - startTime > time_allowance: break
+			if greed.attemptRoute(startingCity=i) and greed.currentCost < greed.bssfCost:
+				greed.setBSSFToCurrent()
+		self._bssf = TSPSolution(greed.getBSSFPath(cities))
+
+		# 2-opt algorithm, priority queue adaptation
+		Q = DAryHeapPriorityQueue(d=nCities, elementList=[self._bssf])
+		while Q.notEmpty() and time.time() - startTime < time_allowance:
+			P = Q.deleteMin()
+			# i = the initial index to start reversing cities in the route at.
+			for i in range(nCities - 1):
+				if time.time() - startTime > time_allowance:
+					break
+				# k = the city to stop reversing cities at.
+				for k in range(i + 1, nCities):
+					# If it ran out of time, exit while loop.
+					if time.time() - startTime > time_allowance:
+						break
+					# Reverses the section of the route between i and k, and creates a new solution with the new route
+					newRoute = TSPSolution(self.twoOptSwap(deepcopy(P.route), i, k))
+					# If the new route is better, update bssf, and restart the while loop.
+					if newRoute.cost < P.cost:
+						Q.insert(newRoute, newRoute.cost)
+					if newRoute.cost < self._bssf.cost:
+						intermediateSolutions += 1
+						self._bssf = newRoute
 
 		end_time = time.time()
 
