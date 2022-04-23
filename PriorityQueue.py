@@ -67,18 +67,20 @@ class PriorityQueue:
 
 class DAryHeapPriorityQueue(PriorityQueue):
 
-    def __init__(self, d = 3, elementList = []):
+    def __init__(self, d = 3, elementList = [], queueSizeLimit = -1):
         super().__init__()
         # d is the number of children a node can have.
         self.d = d
         self.dic = dict()
         self.queue = []
+        self.queueSizeLimit = queueSizeLimit
         if len(elementList) > 0:
             self.makeQueue(elementList)
 
     # Creates a priority queue with all priority levels the same
     def makeQueue(self, elements, defaultPriority = math.inf):
         for element in elements:
+            if self.queueSizeLimit > 0 and len(self.queue) >= self.queueSizeLimit: break
             newNode = PrioritizedHeapNode(element, defaultPriority)
             if len(self.queue) > 0:
                 newNode.parent = self.queue[math.ceil(len(self.queue) / self.d) - 1]
@@ -105,6 +107,11 @@ class DAryHeapPriorityQueue(PriorityQueue):
 
         # Bubble up the new node
         self.bubbleUp(newNode)
+
+        if self.queueSizeLimit > 0 and len(self.queue) > self.queueSizeLimit:
+            delNode = self.queue[-1]
+            self.dic.pop(hash(self.queue[-1]))
+            self.queue.__delitem__(-1)
 
         return newNode
 

@@ -189,7 +189,7 @@ class TSPSolver:
 
 	def fancy(self, time_allowance=60.0):
 		# If you want to run the augmented algorithm:
-		#return self.fancyQueue(time_allowance)
+		# return self.fancyQueue(time_allowance)
 
 		results = {}
 		intermediateSolutions = 0
@@ -225,7 +225,7 @@ class TSPSolver:
 						improvementMade = True
 						break
 					# Reverses the section of the route between i and k, and creates a new solution with the new route
-					newRoute = TSPSolution(self.twoOptSwap(deepcopy(P.route), i, k))
+					newRoute = TSPSolution(self.twoOptSwap(deepcopy(self._bssf.route), i, k))
 					# If the new route is better, update bssf, and restart the while loop.
 					if newRoute.cost < self._bssf.cost:
 						intermediateSolutions += 1
@@ -248,6 +248,16 @@ class TSPSolver:
 
 		return results
 
+	'''
+		2-opt algorithm, priority queue adaptation
+		The queueSizeLimit limits the size of the queue. It defaults to -1, which means it has no limit.
+		Once the limit is surpassed, the heap will drop the very last node (TSPSolution). Since heaps are only pseudo-sorted, 
+		this also introduces an element of randomness to which solutions are kept, but it does keep, more or less, the
+		best 10 solutions. Haven't tested it too thoroughly yet, but it seems to actually perform better (more optimal)
+		WITH a limit. And clearly the Big-O is exponentially better. 
+		Similar to a beam search approach, using a hybrid between a genetic and local search alg.
+	'''
+
 	def fancyQueue(self, time_allowance=60.0):
 		results = {}
 		intermediateSolutions = 0
@@ -263,8 +273,7 @@ class TSPSolver:
 				greed.setBSSFToCurrent()
 		self._bssf = TSPSolution(greed.getBSSFPath(cities))
 
-		# 2-opt algorithm, priority queue adaptation
-		Q = DAryHeapPriorityQueue(d=nCities, elementList=[self._bssf])
+		Q = DAryHeapPriorityQueue(d=nCities, elementList=[self._bssf], queueSizeLimit=10)
 		while Q.notEmpty() and time.time() - startTime < time_allowance:
 			P = Q.deleteMin()
 			# i = the initial index to start reversing cities in the route at.
