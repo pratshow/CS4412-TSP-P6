@@ -189,7 +189,7 @@ class TSPSolver:
 
 	def fancy(self, time_allowance=60.0):
 		# If you want to run the augmented algorithm:
-		#return self.fancyQueue(time_allowance)
+		# return self.fancyQueue(time_allowance)
 
 		results = {}
 		intermediateSolutions = 0
@@ -251,11 +251,6 @@ class TSPSolver:
 	'''
 		2-opt algorithm, priority queue adaptation
 		The queueSizeLimit limits the size of the queue. It defaults to -1, which means it has no limit.
-		Once the limit is surpassed, the heap will drop the very last node (TSPSolution). Since heaps are only pseudo-sorted, 
-		this also introduces an element of randomness to which solutions are kept, but it does keep, more or less, the
-		best 10 solutions. Haven't tested it too thoroughly yet, but it seems to actually perform better (more optimal)
-		WITH a limit. And clearly the Big-O is exponentially better. 
-		Similar to a beam search approach, using a hybrid between a genetic and local search alg.
 	'''
 
 	def fancyQueue(self, time_allowance=60.0):
