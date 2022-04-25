@@ -157,8 +157,13 @@ class TSPSolver:
 						intermediateSolutions += 1
 				elif self._bssf is None or P.lowerbound() < self._bssf.lowerbound():
 					# Scales the priority, so that initially it favors a "deep" search, gradually transitioning to wide
-					S.insert(P, P.lowerbound() * time_allowance / (
-								P.partialPathSize() * (time_allowance - (time.time() - start_time))))
+					# This first one results in significantly larger queue size. Unsure whether this is good or bad.
+					# Seems we want the queue size to grow as time goes on (exploring vs. exploiting states).
+					# That said, it seems to reduce the number of states created and pruned, by quite a bit.
+					#S.insert(P, P.lowerbound() * time_allowance / (
+								#P.partialPathSize() * (time_allowance - (time.time() - start_time))))
+					S.insert(P, P.lowerbound() * (time_allowance - (time.time() - start_time)) / (
+								P.partialPathSize() * time_allowance))
 				else:
 					totalPruned += 1
 
@@ -213,10 +218,6 @@ class TSPSolver:
 			improvementMade = False
 			# i = the initial index to start reversing cities in the route at.
 			for i in range(nCities - 1):
-				if time.time() - startTime > time_allowance:
-					# Obviously no improvement made, just being used to exit the for-loops; the while loop will discontinue
-					improvementMade = True
-					break
 				# k = the city to stop reversing cities at.
 				for k in range(i + 1, nCities):
 					# If it ran out of time, exit while loop.
@@ -230,8 +231,8 @@ class TSPSolver:
 					if newRoute.cost < self._bssf.cost:
 						intermediateSolutions += 1
 						self._bssf = newRoute
-						improvementMade = True
 						# Found a solution. Exiting both for-loops, to start next while loop.
+						improvementMade = True
 						break
 				# Found a solution in current while loop. Exiting both for-loops, to start next while loop.
 				if improvementMade: break
