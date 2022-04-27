@@ -82,20 +82,27 @@ class TSPSolver:
 		algorithm</returns> 
 	'''
 
+	# Runs in O(n^3) time, O(n^2) space
 	def greedy(self, time_allowance=60.0):
 		results = {}
 		intermediateSolutions = 0
 		cities = self._scenario.getCities()
 		nCities = len(cities)
 		startTime = time.time()
+
+		# O(n^2) time and space
 		greed = Greedy(cities)
 
+		# O(n) loops * ( O(n^2) + O(n) ) = O(n^3) time, O(1) space
+		# O(n) loops
 		for i in range(nCities):
 			if time.time() - startTime > time_allowance: break
 
+			# O(n^2) time, O(1) space (note: this space is not multiplied by loops)
 			if greed.attemptRoute(startingCity=i) and greed.currentCost < greed.bssfCost:
 				if greed.bssfRoute is not None:
 					intermediateSolutions += 1
+				# O(n) time, no space
 				greed.setBSSFToCurrent()
 
 		end_time = time.time()
@@ -202,22 +209,33 @@ class TSPSolver:
 		nCities = len(cities)
 		startTime = time.time()
 
+		# O(n^2) time and space
 		# Finding initial BSSF
 		greed = Greedy(cities)
+
+		# O(n) loops * ( O(n^2) + O(n) ) = O(n^3) time, O(1) space
+		# O(n) loops
 		for i in range(nCities):
 			if time.time() - startTime > time_allowance: break
+			# O(n^2) time, O(1) space (note: this space is not multiplied by the for loops)
 			if greed.attemptRoute(startingCity=i) and greed.currentCost < greed.bssfCost:
+				# O(n) time, no space
 				greed.setBSSFToCurrent()
 		self._bssf = TSPSolution(greed.getBSSFPath(cities))
 
 		# 2-opt algorithm
 		# Note: much of the basis for this is from https://en.wikipedia.org/wiki/2-opt
 		improvementMade = True
+
+		# How many while loops (worst case)?
 		# While improvements are still being made.
 		while improvementMade and time.time() - startTime < time_allowance:
 			improvementMade = False
+			# O(n) loops * O(n) loops * O(n) = O(n^3) time, O(n) space (note: space not multiplied by for loops)
+			# O(n) loops
 			# i = the initial index to start reversing cities in the route at.
 			for i in range(nCities - 1):
+				# O(n) loops
 				# k = the city to stop reversing cities at.
 				for k in range(i + 1, nCities):
 					# If it ran out of time, exit while loop.
@@ -225,6 +243,8 @@ class TSPSolver:
 						# Obviously no improvement made, just being used to exit the for-loops; the while loop will discontinue
 						improvementMade = True
 						break
+
+					# O(copy) + O(2-opt swap) + O(solution) = O(n) + O(n) + O(n) = O(n) time and space (note: space not multiplied)
 					# Reverses the section of the route between i and k, and creates a new solution with the new route
 					newRoute = TSPSolution(self.twoOptSwap(deepcopy(self._bssf.route), i, k))
 					# If the new route is better, update bssf, and restart the while loop.
@@ -236,7 +256,6 @@ class TSPSolver:
 						break
 				# Found a solution in current while loop. Exiting both for-loops, to start next while loop.
 				if improvementMade: break
-
 		end_time = time.time()
 
 		results['cost'] = self._bssf.cost if self._bssf is not None else math.inf
@@ -308,6 +327,7 @@ class TSPSolver:
 		Used as part of the 2-opt algorithm.
 	'''
 
+	# Runs in O(n) time and space
 	def twoOptSwap(self, route = None, startInclusive = -1, stopInclusive = -1):
 		assert(route is not None)
 		assert(startInclusive >= 0 and startInclusive < len(route) - 1)
@@ -531,6 +551,7 @@ class State:
 
 class Greedy:
 
+	# O(n^2) time and space
 	def __init__(self, cities):
 		self.costMatrix = initialCostMatrix(cities)
 		self.currentPath = []
@@ -539,6 +560,7 @@ class Greedy:
 		self.bssfCost = math.inf
 		self.bssfRoute = []
 
+	# O(n) time and space, no additional space subsequently
 	def __resetStartingCity__(self, cityIndex):
 		cities = [i for i in range(len(self.costMatrix[0]))]
 		cities.remove(cityIndex)
@@ -546,6 +568,7 @@ class Greedy:
 		self.remainingCities = cities
 		self.currentCost = 0
 
+	# O(n) time, O(1) space
 	def __getCheapestCity__(self):
 		bssfCost = math.inf
 		bssfCityIndex = None
@@ -555,6 +578,7 @@ class Greedy:
 				bssfCityIndex = cityIndex
 		return bssfCityIndex
 
+	# O(__getCheapestCity()__) = O(n) time, O(1) space
 	def __nextCity__(self):
 		cityIndex = self.__getCheapestCity__()
 		if cityIndex is None: return False
@@ -563,11 +587,14 @@ class Greedy:
 		self.remainingCities.remove(cityIndex)
 		return True
 
+	# O(1) time, no space
 	def __isValidSolution__(self):
 		return (len(self.remainingCities) == 0 and
 				len(self.currentPath) == len(self.costMatrix[0]) and
 				self.currentCost != math.inf)
 
+	# O(__resetStartingCity()__) + O(n) * O(__nextCity()__) + O(__isValidSolution()__) = O(n) + O(n) * O(n) + O(1)
+	#	= O(n^2) time, O(1) space
 	# Sets the starting city, and attempts to find a greedy route, returning whether it was successful.
 	def attemptRoute(self, startingCity = None):
 		assert (startingCity is not None)
@@ -577,11 +604,13 @@ class Greedy:
 		self.currentCost += self.costMatrix[self.currentPath[-1]][self.currentPath[0]]
 		return self.__isValidSolution__()
 
+	# O(__isValidSolution()__) + O(n) = O(n) time, no space
 	def setBSSFToCurrent(self):
 		assert(self.__isValidSolution__())
 		self.bssfCost = self.currentCost
 		self.bssfRoute = deepcopy(self.currentPath)
 
+	# O(n) time and space
 	def getBSSFPath(self, cities = None):
 		assert(cities is not None)
 		path = []
@@ -589,6 +618,7 @@ class Greedy:
 			path.append(cities[cityIndex])
 		return path
 
+	# O(n) time and space
 	def getPath(self, cities = None):
 		assert(cities is not None)
 		path = []
